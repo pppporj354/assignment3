@@ -1,12 +1,41 @@
 package main
 
 import (
-	"assignment2/db"
-	"assignment2/models"
+	"assignment3/db"
+	"assignment3/models"
 	"fmt"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"strings"
 )
+
+func AuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header not provided"})
+			c.Abort()
+			return
+		}
+
+		tokenString := strings.Split(authHeader, " ")[1]
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+			}
+			return []byte("fasdgsdgsd"), nil
+		})
+
+		if err != nil || !token.Valid {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
 
 func createOrder(c *gin.Context) {
 	var order models.Order
@@ -68,11 +97,12 @@ func deleteOrder(c *gin.Context) {
 
 func setupRoutes() *gin.Engine {
 	r := gin.Default()
-	r.POST("/orders", createOrder)
-	r.GET("/orders", getOrders)
-	r.GET("/orders/:orderId", getOrder)
-	r.PUT("/orders/:orderId", updateOrder)
-	r.DELETE("/orders/:orderId", deleteOrder)
+	r.Use(AuthMiddleware())
+	r.POST("/orders", AuthMiddleware(), createOrder)
+	r.GET("/orders", AuthMiddleware(), getOrders)
+	r.GET("/orders/:orderId", AuthMiddleware(), getOrder)
+	r.PUT("/orders/:orderId", AuthMiddleware(), updateOrder)
+	r.DELETE("/orders/:orderId", AuthMiddleware(), deleteOrder)
 	return r
 }
 
